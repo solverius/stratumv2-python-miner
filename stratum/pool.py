@@ -17,10 +17,10 @@ from dissononce.processing.impl.handshakestate import HandshakeState
 from dissononce.processing.impl.symmetricstate import SymmetricState
 from event_bus import EventBus
 
-import primitives.coins as coins
-from primitives.connection import Connection
-from primitives.hashrate_meter import HashrateMeter
-from primitives.protocol import ConnectionProcessor
+import stratum.coins as coins
+from stratum.network import Connection
+from stratum.hashrate_meter import HashrateMeter
+from stratum.protocol import ConnectionProcessor
 
 """Stratum V2 pool implementation
 
@@ -29,10 +29,10 @@ import asyncio
 import random
 from asyncio import StreamReader, StreamWriter
 
-import primitives.coins as coins
-from primitives.messages import *
-from primitives.protocol import ConnectionProcessor
-from primitives.session import (
+import stratum.coins as coins
+from stratum.messages import *
+from stratum.protocol import ConnectionProcessor
+from stratum.session import (
     ChannelRegistry,
     MiningChannel,
     MiningJob,
@@ -40,7 +40,7 @@ from primitives.session import (
     MiningSession,
     PoolMiningChannel,
 )
-from primitives.types import DownstreamConnectionFlags, UpstreamConnectionFlags
+from stratum.types import DownstreamConnectionFlags, UpstreamConnectionFlags
 
 
 class Pool(ConnectionProcessor):

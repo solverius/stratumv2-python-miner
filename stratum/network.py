@@ -1,13 +1,9 @@
 import asyncio
 import random
-import socket
 import time
-from abc import ABC, abstractmethod
 
 import base58
 import ed25519
-import numpy as np
-import simpy
 from colorama import Fore, Style
 from dissononce.cipher.chachapoly import ChaChaPolyCipher
 from dissononce.dh.x25519.x25519 import X25519DH
@@ -18,7 +14,7 @@ from dissononce.processing.impl.handshakestate import HandshakeState
 from dissononce.processing.impl.symmetricstate import SymmetricState
 from hashids import Hashids
 
-from primitives.messages import Message
+from stratum.v2.messages import Message
 
 SLUSHPOOL_CA_PUBKEY = "u95GEReVMjK6k5YqiSFNqqTnKU4ypU2Wm8awa6tmbmDmk1bWt"
 

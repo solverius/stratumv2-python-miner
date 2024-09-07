@@ -1,67 +1,16 @@
 # see https://github.com/stratumv2/stratumv2/blob/master/messages.py it has some parsing already
 
 import typing
-from abc import ABC, abstractmethod
 
-import stringcase
-
-from .message_types import *
-
-
-class Message:
-    """Generic message that accepts visitors and dispatches their processing."""
-
-    class VisitorMethodNotImplemented(Exception):
-        """Custom handling to report if visitor method is missing"""
-
-        def __init__(self, method_name):
-            self.method_name = method_name
-
-        def __str__(self):
-            return self.method_name
-
-    def __init__(self, req_id=None):
-        self.req_id = req_id
-
-    def accept(self, visitor):
-        """Call visitor method based on the actual message type."""
-        method_name = "visit_{}".format(stringcase.snakecase(type(self).__name__))
-
-        try:
-            visit_method = getattr(visitor, method_name)
-        except AttributeError:
-            raise self.VisitorMethodNotImplemented(method_name)
-
-        visit_method(self)
-
-    def _format(self, content):
-        return "{}({})".format(type(self).__name__, content)
-
-    def to_frame(self):
-        payload = self.to_bytes()
-        # self.__class__.__name__ will return the derived class name
-        frame = FRAME(0x0, self.__class__.__name__, payload)
-        return frame
-
-    # accepts an already decrypted message
-    @staticmethod
-    def from_frame(raw: bytes):
-        extension_type = raw[0:1]
-        msg_type = raw[2]  # U8
-        msg_length = raw[3:5]  # U24
-        raw = raw[6:]  # remove the common bytes
-
-        msg_class = msg_type_class_map[msg_type]
-        decoded_msg = msg_class.from_bytes(raw)
-        return decoded_msg
-
-    @abstractmethod
-    def to_bytes(self):
-        pass
-
-    @abstractmethod
-    def from_bytes(self):
-        pass
+"""Stratum V2 messages."""
+from stratum.protocol import Message
+from stratum.v2.types import (
+    Hash,
+    MerklePath,
+    CoinBasePrefix,
+    CoinBaseSuffix,
+)
+from stratum.v2.message_types import *
 
 
 class ChannelMessage(Message):
@@ -91,7 +40,7 @@ class SetupConnection(Message):
         vendor: str,
         hardware_version: str,
         firmware: str,
-        device_id: str = "",
+        device_id: str = '',
     ):
         # 0 = Mining Protocol
         # 1 = Job Negotiation Protocol
@@ -240,7 +189,6 @@ class SetupConnectionSuccess(Message):
         used_version = U16(self.used_version)
         flags = U32(self.flags)
         payload = used_version + flags
-
         return payload
 
     @staticmethod
@@ -293,6 +241,7 @@ class SetupConnectionError(Message):
         return msg
 
 
+# Mining Protocol Messages
 # This message requests to open a standard channel to the upstream node.
 # After receiving a SetupConnection.Success message, the client SHOULD respond by opening channels
 # on the connection. If no channels are opened within a reasonable period the server SHOULD close
@@ -363,14 +312,6 @@ class OpenStandardMiningChannel(Message):
             max_target=max_target,
         )
         return msg
-
-
-# Sent as a response for opening a standard channel
-class OpenStandardMiningChannelError(Message):
-    def __init__(self, req_id, error_code: str):
-        self.req_id = req_id
-        self.error_code = error_code
-        super().__init__(req_id)
 
 
 # Sent as a response for opening a standard channel, if successful.
@@ -445,17 +386,48 @@ class OpenStandardMiningChannelSuccess(ChannelMessage):
         return payload
 
 
-# Changes downstream node’s extranonce prefix. It is applicable for all jobs sent
-# after this message on a given channel (both jobs provided by the upstream or jobs
-# introduced by SetCustomMiningJob message). This message is applicable only for
-# explicitly opened extended channels or standard channels (not group channels).
-class SetExtranoncePrefix(ChannelMessage):
-    def __init__(self, channel_id: int, extranonce_prefix: bytes):
-        # Bytes used as implicit first part of extranonce
-        self.extranonce_prefix = extranonce_prefix
+# NOT USED
+# Similar to OpenStandardMiningChannel but requests to open an extended channel instead
+# of standard channel
+class OpenExtendedMiningChannel(OpenStandardMiningChannel):
+    def __init__(self, min_extranonce_size: int, *args, **kwargs):
+        self.min_extranonce_size = min_extranonce_size
+        self.new_job_class = NewExtendedMiningJob
+        super().__init__(*args, **kwargs)
 
-        # Extended or standard channel identifier
-        super().__init__(channel_id=channel_id)
+
+# NOT USED
+# Sent as a response for opening an extended channel
+class OpenExtendedMiningChannelSuccess(ChannelMessage):
+    def __init__(
+        self,
+        req_id,
+        channel_id: int,
+        target: int,
+        extranonce_size: int,
+        extranonce_prefix: bytes,
+    ):
+        self.target = target
+        self.extranonce_prefix = extranonce_prefix
+        self.extranonce_size = extranonce_size
+        super().__init__(channel_id=channel_id, req_id=req_id)
+
+
+# NOT USED
+# Sent as a response for opening an extended channel
+class OpenMiningChannelError(Message):
+    def __init__(self, req_id, error_code: str):
+        self.req_id = req_id
+        self.error_code = error_code
+        super().__init__(req_id)
+
+
+# Sent as a response for opening a standard channel
+class OpenStandardMiningChannelError(Message):
+    def __init__(self, req_id, error_code: str):
+        self.req_id = req_id
+        self.error_code = error_code
+        super().__init__(req_id)
 
 
 # Client notifies the server about changes on the specified channel.
@@ -483,6 +455,19 @@ class UpdateChannelError(ChannelMessage):
 class CloseChannel(ChannelMessage):
     def __init__(self, channel_id: int, reason_code: str):
         self.reason_code = reason_code
+        super().__init__(channel_id=channel_id)
+
+
+# Changes downstream node’s extranonce prefix. It is applicable for all jobs sent
+# after this message on a given channel (both jobs provided by the upstream or jobs
+# introduced by SetCustomMiningJob message). This message is applicable only for
+# explicitly opened extended channels or standard channels (not group channels).
+class SetExtranoncePrefix(ChannelMessage):
+    def __init__(self, channel_id: int, extranonce_prefix: bytes):
+        # Bytes used as implicit first part of extranonce
+        self.extranonce_prefix = extranonce_prefix
+
+        # Extended or standard channel identifier
         super().__init__(channel_id=channel_id)
 
 
@@ -549,6 +534,36 @@ class SubmitSharesStandard(ChannelMessage):
             nonce=nonce,
             ntime=ntime,
             version=version,
+        )
+        return msg
+
+
+class SubmitSharesExtended(SubmitSharesStandard):
+    def __init__(self, extranonce, *args, **kwargs):
+        self.extranonce = extranonce
+        super().__init__(*args, **kwargs)
+
+    def to_bytes(self):
+        return super().to_bytes() + B0_32(self.extranonce)
+
+    @staticmethod
+    def from_bytes(bytes: bytearray):
+        channel_id = int.from_bytes(bytes[0:4], byteorder="little")
+        sequence_number = int.from_bytes(bytes[4:8], byteorder="little")
+        job_id = int.from_bytes(bytes[8:12], byteorder="little")
+        nonce = int.from_bytes(bytes[12:16], byteorder="little")
+        ntime = int.from_bytes(bytes[16:20], byteorder="little")
+        version = int.from_bytes(bytes[20:24], byteorder="little")
+        extranonce = int.from_bytes(bytes[24:56], byteorder="little")
+
+        msg = SubmitSharesExtended(
+            channel_id=channel_id,
+            sequence_number=sequence_number,
+            job_id=job_id,
+            nonce=nonce,
+            ntime=ntime,
+            version=version,
+            extranonce=extranonce,
         )
         return msg
 
@@ -722,6 +737,73 @@ class NewMiningJob(ChannelMessage):
             merkle_root=merkle_root,
         )
         return msg
+
+
+class NewExtendedMiningJob(ChannelMessage):
+    def __init__(
+        self,
+        channel_id: int,
+        job_id: int,
+        future_job: bool,
+        version: int,
+        version_rolling_allowed: bool,
+        merkle_path: MerklePath,
+        cb_prefix: CoinBasePrefix,
+        cb_suffix: CoinBaseSuffix,
+    ):
+        self.job_id = job_id
+        self.future_job = future_job
+        self.version = version
+        self.version_rolling_allowed = version_rolling_allowed
+        self.merkle_path = merkle_path
+        self.cb_prefix = cb_prefix
+        self.cb_suffix = cb_suffix
+        super().__init__(channel_id=channel_id)
+
+    def __str__(self):
+        return self._format(
+            "channel_id={}, job_id={}, future_job={}, version={}, merkle_path={}".format(
+                self.channel_id,
+                self.job_id,
+                self.future_job,
+                self.version,
+                self.merkle_path,
+            )
+        )
+
+    def to_bytes(self):
+        channel_id = U32(self.channel_id)
+        job_id = U32(self.job_id)
+        future_job = BOOL(self.future_job)
+        version = U32(self.version)
+        version_rolling_allowed = BOOL(self.version_rolling_allowed)
+        merkle_path = SEQ0_255(self.merkle_path)
+        cb_prefix = B0_64K(self.cb_prefix)
+        cb_suffix = B0_64K(self.cb_suffix)
+
+        payload = channel_id + job_id + future_job + version + version_rolling_allowed + merkle_path + cb_prefix + cb_suffix
+
+        return payload
+
+    @staticmethod
+    def from_bytes(bytes: bytearray):
+        channel_id = int.from_bytes(bytes[:4], byteorder="little")
+        job_id = int.from_bytes(bytes[4:8], byteorder="little")
+        future_job = bytes[8] == 0x0
+        OFFSET = 4 if future_job else 0
+        version = int.from_bytes(bytes[9 + OFFSET:13 + OFFSET], byteorder="little")
+        version_rolling_allowed = bytes[8] == 1
+        merkle_path = bytes[18:45]
+
+        msg = NewMiningJob(
+            channel_id=channel_id,
+            job_id=job_id,
+            future_job=future_job,
+            version=version,
+            merkle_root=merkle_root,
+        )
+        return msg
+
 
 
 # Server -> Client, broadcast
@@ -914,9 +996,9 @@ class NewExtendedMiningJob(ChannelMessage):
         future_job: bool,
         version: int,
         version_rolling_allowed: bool,
-        merkle_path: bytes,  # MerklePath,
-        cb_prefix: bytes,  # CoinBasePrefix,
-        cb_suffix: bytes,  # CoinBaseSuffix,
+        merkle_path: MerklePath,
+        cb_prefix: CoinBasePrefix,
+        cb_suffix: CoinBaseSuffix,
     ):
         self.job_id = job_id
         self.future_job = future_job
@@ -926,42 +1008,6 @@ class NewExtendedMiningJob(ChannelMessage):
         self.cb_prefix = cb_prefix
         self.cb_suffix = cb_suffix
         super().__init__(channel_id=channel_id)
-
-
-# NOT USED
-# Similar to OpenStandardMiningChannel but requests to open an extended channel instead
-# of standard channel
-class OpenExtendedMiningChannel(OpenStandardMiningChannel):
-    def __init__(self, min_extranonce_size: int, *args, **kwargs):
-        self.min_extranonce_size = min_extranonce_size
-        self.new_job_class = NewExtendedMiningJob
-        super().__init__(*args, **kwargs)
-
-
-# NOT USED
-# Sent as a response for opening an extended channel
-class OpenExtendedMiningChannelSuccess(ChannelMessage):
-    def __init__(
-        self,
-        req_id,
-        channel_id: int,
-        target: int,
-        extranonce_size: int,
-        extranonce_prefix: bytes,
-    ):
-        self.target = target
-        self.extranonce_prefix = extranonce_prefix
-        self.extranonce_size = extranonce_size
-        super().__init__(channel_id=channel_id, req_id=req_id)
-
-
-# NOT USED
-# Sent as a response for opening an extended channel
-class OpenMiningChannelError(Message):
-    def __init__(self, req_id, error_code: str):
-        self.req_id = req_id
-        self.error_code = error_code
-        super().__init__(req_id)
 
 
 # NOT USED

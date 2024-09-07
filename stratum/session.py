@@ -1,34 +1,17 @@
 """Generic pool module"""
-import base64
-import hashlib
-import socket
 
-import numpy as np
 import simpy
-from cryptography.hazmat.primitives.asymmetric import x25519
-from dissononce.cipher.chachapoly import ChaChaPolyCipher
-from dissononce.dh.x25519.x25519 import X25519DH
-from dissononce.hash.blake2s import Blake2sHash
-from dissononce.processing.handshakepatterns.interactive.NX import NXHandshakePattern
-from dissononce.processing.impl.cipherstate import CipherState
-from dissononce.processing.impl.handshakestate import HandshakeState
-from dissononce.processing.impl.symmetricstate import SymmetricState
 from event_bus import EventBus
 
-import primitives.coins as coins
-from primitives.connection import Connection
-from primitives.hashrate_meter import HashrateMeter
-from primitives.protocol import ConnectionProcessor
+from stratum.hashrate_meter import HashrateMeter
 
 """Stratum V2 pool implementation
 
 """
-import random
 
-import primitives.coins as coins
-from primitives.messages import *
-from primitives.protocol import ConnectionProcessor
-from primitives.types import DownstreamConnectionFlags, UpstreamConnectionFlags
+import stratum.coins as coins
+from stratum.v2.messages import *
+from stratum.v2.types import DownstreamConnectionFlags
 
 
 class MiningJob:

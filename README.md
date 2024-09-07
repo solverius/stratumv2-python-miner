@@ -20,7 +20,7 @@ Run pool with `python3 simulate-pool.py` and miner with `python3 mine.py`.
 
 # Overview
 
-The protocol used is **Stratum V2**. The basis for this repository is https://github.com/braiins/braiins/tree/bos-devel/open/protocols/stratum/sim.
+The protocol used is **Stratum V2**. The basis for this repository is https://github.com/braiins/braiins-open/tree/master/protocols/stratum/sim.
 
 # Features
 

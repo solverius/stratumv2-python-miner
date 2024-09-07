@@ -5,15 +5,13 @@ import math
 import time
 from hashlib import sha256
 
-import numpy as np
-import simpy
 from colorama import Fore, Style
 from event_bus import EventBus
 
-import primitives.coins as coins
-from primitives.connection import Connection
-from primitives.hashrate_meter import HashrateMeter
-from primitives.messages import (
+import stratum.coins as coins
+from stratum.network import Connection
+from stratum.hashrate_meter import HashrateMeter
+from stratum.v2.messages import (
     NewMiningJob,
     OpenMiningChannelError,
     OpenStandardMiningChannel,
@@ -27,12 +25,12 @@ from primitives.messages import (
     SubmitSharesStandard,
     SubmitSharesSuccess,
 )
-from primitives.protocol import ConnectionProcessor
-from primitives.session import MiningJob, MiningSession, PoolMiningChannel
-from primitives.types import DownstreamConnectionFlags, ProtocolType
+from stratum.protocol import DownstreamConnectionProcessor
+from stratum.session import MiningJob, MiningSession, PoolMiningChannel
+from stratum.v2.types import ProtocolType
 
 
-class Miner(ConnectionProcessor):
+class Miner(DownstreamConnectionProcessor):
     class States(enum.Enum):
         INIT = 0
         CONNECTION_SETUP = 1
@@ -45,7 +43,7 @@ class Miner(ConnectionProcessor):
         device_information: dict,
         connection: Connection,
         *args,
-        **kwargs,
+        **kwargs
     ):
         self.name = name
         self.bus = bus
@@ -102,6 +100,7 @@ class Miner(ConnectionProcessor):
 
         nonce = 0
         min_hash = 0xFFFF << 224
+        max_hash = 0x0
 
         # version: from NewMiningJob message
         # prev_hash: from SetNewPrevHash message
@@ -118,6 +117,7 @@ class Miner(ConnectionProcessor):
         )
 
         job.started_at = int(time.time())
+        started_at = int(time.time())
         print("Max target:")
         print((0xFFFF << 208).to_bytes(32, byteorder="big").hex())
         print("Curr target:")
@@ -133,8 +133,12 @@ class Miner(ConnectionProcessor):
             hash = int.from_bytes(hash_bytes, byteorder="little")
 
             if hash < min_hash:
-                print(hash.to_bytes(32, byteorder="big").hex())
+                print('-', hash.to_bytes(32, byteorder="big").hex(), time.time() - job.started_at, nonce, f'{int((nonce+1)/(time.time() - started_at))} H/s')
                 min_hash = hash
+
+            if hash > max_hash:
+                print('+', hash.to_bytes(32, byteorder="big").hex(), time.time() - job.started_at, nonce, f'{int((nonce+1)/(time.time() - started_at))} H/s')
+                max_hash = hash
 
             if hash < self.channel.session.curr_target.target:
                 self.__emit_aux_msg_on_bus("solution found for job {}".format(job.uid))
@@ -165,7 +169,7 @@ class Miner(ConnectionProcessor):
         self.setup_connection()
 
     def disconnect(self):
-        self.__emit_aux_msg_on_bus("Disconnecting from pool")
+        self.__emit_aux_msg_on_bus('Disconnecting from pool')
         if self.mine_proc:
             self.mine_proc.interrupt()
         # Mining is shutdown, terminate any protocol message processing

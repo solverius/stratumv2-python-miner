@@ -9,11 +9,11 @@ import simpy
 from colorama import Fore, init
 from event_bus import EventBus
 
-import primitives.coins as coins
-import primitives.mining_params as mining_params
-from primitives.connection import Connection
-from primitives.miner import Miner
-from primitives.pool import Pool
+import stratum.coins as coins
+import stratum.mining_params as mining_params
+from stratum.network import Connection
+from stratum.miner import Miner
+from stratum.pool import Pool
 
 init()
 bus = EventBus()
